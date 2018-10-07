@@ -1,0 +1,228 @@
+#include<dht11.h>
+#include <Wire.h>
+#include <SoftwareSerial.h>
+#include <LiquidCrystal_I2C.h>
+dht11 DHT11;//溫度感測器
+const byte dataPin = 12; //溫度感測腳位
+float temp = DHT11.temperature;
+float extreme = 18; //臨界溫度初始
+boolean add = 0; //加 臨界溫度控制開關
+boolean sub = 0; //減
+LiquidCrystal_I2C lcd (0x27, 16, 2);
+SoftwareSerial I2CBT(10,11);
+const byte LED = 13;
+const byte CdS = A0;
+const byte ENB = A1; // 馬達的致能接腳
+const byte IN3 = 6; // 馬達的正反轉接腳
+const byte IN4 = 5; // 馬達的正反轉接腳
+const byte ENA = A2; // 馬達的致能接腳
+const byte IN1 = 3; // 馬達的正反轉接腳
+const byte IN2 = 4; // 馬達的正反轉接腳
+const byte speed = 255; // 馬達的 PWM 輸出值
+int ang[]={45,90};
+int wstate = 3;//判斷抽水或加水
+int lst = 0;
+int st = -1;
+int count=0;//抽換水的回合
+ void setup() {
+  pinMode(LED, OUTPUT) ;
+  pinMode(8, INPUT); //控制臨界溫度的開關
+  pinMode(9, INPUT);
+  Serial.begin(9600);
+  I2CBT.begin(9600);
+  lcd.init();   ////LCD
+  lcd.backlight();
+  lcd.setCursor(0, 0);
+  lcd.print("now:");
+  lcd.setCursor(0, 1);
+  lcd.print("extreme:");
+  lcd.print(extreme);
+  pinMode(IN3, OUTPUT);//馬達(出)
+  pinMode(IN4, OUTPUT);
+  pinMode(ENB, OUTPUT);
+  pinMode(IN1, OUTPUT);//馬達(入)
+  pinMode(IN2, OUTPUT);
+  pinMode(ENA, OUTPUT);
+}
+/// 0 -> BT
+/// 1 -> auto
+
+void loop() {
+  LCDtemp();
+  light();
+  sub = digitalRead(8);
+  if(sub == 1)
+    st=0;
+  if(st == 0)
+    BT();
+  if(st == 1)
+  {
+    /////////////////////////////////////溫度///////////////////////////////////
+
+    /////////////////////////////////////溫度///////////////////////////////////
+    ////////////////////////////////////換水///////////////////////////////
+    if((float)DHT11.temperature >= extreme+2.0)
+        wstate=0;
+    Serial.print("wstate=");
+        Serial.println(wstate);
+    if(wstate == 0)//抽水馬達
+    {
+      Serial.println("OUT");
+      count++;
+      forward();
+      delay(3000);
+      stop();
+      wstate=1;
+    }
+     sub = digitalRead(8);
+     if(sub == 1)
+     {
+        st=0;
+        wstate=2;
+        Serial.print("wstate2=");
+        Serial.println(wstate);
+     }
+       
+    // if(st == 0)
+    // {
+    //    S
+    //    BT();
+        
+   //  }
+         delay(500);
+     if((float)DHT11.temperature >= extreme+2.0 && wstate != 2)
+        wstate=0;
+     else 
+        wstate=1;
+    if(wstate == 1 || wstate ==2 || count==5)//入水馬達
+    {
+      while(count>0)
+      {
+        Serial.println("IN");
+        forwardin();
+        delay(3000*count);
+        stopin();
+        count=0;
+        wstate=3;
+      }
+      
+     }
+     wstate=3;
+    delay(1000);
+  }
+}
+  ////////////////////////////////////換水///////////////////////////////
+////////////////////////////////////換水馬達(出)///////////////////////////////
+void stop() { // 馬達停止
+  analogWrite(ENB, 0); // 馬達 B 的 PWM 輸出
+  digitalWrite(IN3, LOW); // 請參閱表 10-4 的設定
+  digitalWrite(IN4, LOW);
+}
+
+void forward() { // 馬達轉向：前進（兩個馬達都正轉）
+  analogWrite(ENB, speed); // 馬達 B 的 PWM 輸出
+  digitalWrite(IN3, HIGH); // 請參閱表 10-4 的設定
+  digitalWrite(IN4, LOW);
+}
+////////////////////////////////////換水馬達(入)///////////////////////////////
+void stopin() { // 馬達停止
+  analogWrite(ENA, 0); // 馬達 B 的 PWM 輸出
+  digitalWrite(IN1, LOW); // 請參閱表 10-4 的設定
+  digitalWrite(IN2, LOW);
+}
+
+void forwardin() { // 馬達轉向：前進（兩個馬達都正轉）
+  analogWrite(ENA, speed); // 馬達 B 的 PWM 輸出
+  digitalWrite(IN1, HIGH); // 請參閱表 10-4 的設定
+  digitalWrite(IN2, LOW);
+}
+///////////微觸開關-臨界溫度///////
+
+  ////////微觸開關-臨界溫度///////
+  ///////////////////////////////////BT////////////////////////////st=0
+ void BT(){
+   byte cmmd[20];
+   int insize;
+    if ((insize=(I2CBT.available()))>0){
+       Serial.print("input size = "); 
+       Serial.println(insize);
+       for (int i=0; i<insize; i++){
+         Serial.print(cmmd[i]=char(I2CBT.read()));
+         Serial.print("\n"); 
+       }
+    }  
+      switch (cmmd[0]) {
+      case 97: 
+      {
+          while(1)
+          {
+             digitalWrite(LED,HIGH);
+             Serial.print("qqq"); 
+             cmmd[0]=char(I2CBT.read());
+             switch (cmmd[0])
+             {
+                 Serial.print("www"); 
+                 case 98://"b"
+                 {
+                    while(1)
+                    {
+                       digitalWrite(LED,LOW);
+                       lst = 1;
+                       break;
+                    }
+                     break;
+                 }
+             }
+              if(lst == 1)
+              {
+                lst=0;
+                break; 
+              }
+                   
+          }
+      }
+      case 99://"c"
+          extreme = extreme + 0.5;
+          lcd.setCursor(8, 1);
+          lcd.print(extreme);
+           Serial.println(extreme);
+          break;
+      case 100://"d"
+          extreme = extreme - 0.5;
+          lcd.setCursor(8, 1);
+          lcd.print(extreme);
+          break;
+      case 101://"e"
+          st=1;
+          break;
+      
+      } 
+ }
+///////////////////////////BT/////////////////////////////
+///////////光敏感光/////////////////////////////////////////////////////////
+void light(){
+  int val;
+  val = analogRead(A0) ;
+  //Serial.println(val);
+  if (val >= 700) {
+    digitalWrite(LED, HIGH) ;
+  }
+  else {
+    digitalWrite(LED, LOW) ;
+  }
+}
+  ///////////光敏感光/////////////////////////////////////////////////////////
+  ///////////讀取溫度////////////
+  void LCDtemp(){
+    int   chk = DHT11.read(dataPin);
+    if (chk == 0) {
+      //Serial.print("Temperature(oC):");
+     // Serial.println((float)DHT11.temperature, 2);
+     // Serial.print("\n");
+      lcd.setCursor(8, 0);
+      lcd.print((float)DHT11.temperature);
+    } else {
+     // Serial.println("Sensor Error");
+    }
+  }
+  ///////////讀取溫度//////
